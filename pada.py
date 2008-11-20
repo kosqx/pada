@@ -44,7 +44,92 @@ class RowObject(object):
 
     def __iter__(self):
         return iter(self._data)
+
+class Cache(object):
+    def __init__(self, size):
+        self._size = size
+        self._old = {}
+        self._new = {}
+    
+    def __len__(self):
+        return len(self._new) + len(self._old)
+    
+    def __contains__(self, key):
+        return (key in self._new) or (key in self._old)
         
+    def __getitem__(self, key):
+        if key in self._new:
+            return self._new[key]
+        else:
+            return self._old[key]
+    
+    def __setitem__(self, key, value):
+        if key in self._new:
+            self._new[key] = value
+        elif key in self._old:
+            if len(self._new) >= self._size:
+                self._old = self._new
+                self._new = {}
+            else:
+                del self._old[key]
+            self._new[key] = value
+        else:
+            if len(self._new) >= self._size:
+                self._old = self._new
+                self._new = {}
+            self._new[key] = value
+    
+    def __delitem__(self, key):
+        if key in self._new:
+            del self._new[key]
+        else:
+            del self._old[key]
+            
+    def clear(self):
+        self._old = {}
+        self._new = {}
+
+    def __repr__(self):
+        return 'new:%r old:%r' % (self._new, self._old)
+
+
+class CacheTest(unittest.TestCase):
+    def setUp(self):
+        self.cache = Cache(3)
+        for i in xrange(9):
+            self.cache[str(i)] = i
+    
+    def testLen(self):
+        assert len(self.cache) >= 3
+    
+    def testIn(self):
+        assert '6' in self.cache
+        assert '7' in self.cache
+        assert '8' in self.cache
+
+    def testGet(self):
+        assert self.cache['6'] == 6
+        assert self.cache['7'] == 7
+        assert self.cache['8'] == 8
+        
+    def testSet(self):
+        self.cache['6'] = 66
+        self.cache['x'] = 'foo'
+        
+        assert self.cache['8'] == 8
+        assert self.cache['6'] == 66
+        assert self.cache['x'] == 'foo'
+        
+    def testDel(self):
+        del self.cache['7']
+        assert '7' not in self.cache
+        
+    def testClear(self):
+        self.cache.clear()
+        assert '8' not in self.cache
+        assert len(self.cache) == 0
+        
+    
 class DataRewriter(object):
     _paramstyle = {
         'qmark':    {'re': r'(\?)',                  'start': 0, 'end': None, 'pattern': '?',             'type':'pos'},
@@ -573,7 +658,7 @@ def main():
     for i in l:
         print i[0], i[1], i['id'], i['value'], i.id, i.value, list(i)
     '''
-    for i in db.execute({'*': "SELECT * FROM item"}):
+    for i in db.execute({'*': "SELECT * FROM item WHERE value >= :1"}, [5.5]):
         print i.id, i.value
 
 
@@ -586,7 +671,7 @@ if __name__ == '__main__':
     main()
     #test_speed()
     #unittest.main()
-    
+    #print Cache(3)
 ## driver, adapter, module
 
 '''
