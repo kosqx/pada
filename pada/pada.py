@@ -1,11 +1,6 @@
 #!/usr/bin/env python
 #-*- coding: utf-8 -*-
 
-#DSN = "dbname='test_peda' user='kosqx' host='localhost' password='kos144'"
-#DSN = {'host': 'localhost', 'user': 'kosqx', 'passwd': 'kos144', 'db': 'test_mvcc'}
-#DSN = {'user': 'kosqx', 'db': 'test_mvcc'}
-
-
 ## Global TODO:
 #  - czytanie parametrow polacznia z pliku
 #  - przepisywanie parametrow
@@ -44,6 +39,7 @@ class RowObject(object):
 
     def __iter__(self):
         return iter(self._data)
+
 
 class Cache(object):
     def __init__(self, size):
@@ -368,13 +364,32 @@ class Database(object):
         else:
             raise "Dialect %r not supported" % dialect
 
+    # TODO: timer with pause/resume feature, 
+    # use {'name', [previous_counted_time, time_of_last_start]}
+
     def time_start(self, name=None):
-        self._time[name] = time.time()
+        self._time[name] = [0.0, time.time()]
 
     def time_get(self, name=None):
-        try:
-            return time.time() - self._time[name]
-        except:
+        if name in self._time:
+            if self._time[name][1] is None:
+                return self._time[name][0]
+            else:
+                return (time.time() - self._time[name][1]) + self._time[name][0]
+        else:
+            raise 'Unknown clock %r' % name
+        
+    def time_pause(self, name=None):
+        if name in self._time:
+            self._time[name] = [self.get_time(name), None]
+        else:
+            raise 'Unknown clock %r' % name
+    
+    def time_resume(self, name=None):
+        assert self._time[name][1] is None, "Time was not been paused"
+        if name in self._time:
+            self._time[name] = [self._time[name][0], time.time()]
+        else:
             raise 'Unknown clock %r' % name
 
     def ddl(self, sql):
@@ -408,7 +423,8 @@ class Database(object):
 
     def begin(self, isolation=''):
         isolations = {
-            '': None,
+            '':   None,
+            None: None,
             
             0: 'uncommited',
             1: 'commited',
@@ -436,7 +452,8 @@ class Database(object):
             'serializable': 'SET TRANSACTION ISOLATION LEVEL SERIALIZABLE',
         }
         self._cur.execute("BEGIN")
-        self._cur.execute(isolations[isolation])
+        if isolation in isolations:
+            self._cur.execute(isolations[isolation])
         #print isolations[isolation]
 
     #TODO:
@@ -629,13 +646,9 @@ def main():
     db = Database.connect(dialect='sqlite', dbname='abc.db')
     #db = Database.connect(dialect='oracle', dbname='xe', user='kosqx', password='kos144')
     #db = Database.connect(dialect='mysql', dbname='test_mvcc', user='kosqx', password='kos144')
-    
+
     db.set_paramstyle('numeric')
-    
-    #print db._get_param('SELECT * FROM tbl WHERE a = :asdf AND b < :ala LIMIT :limit')
-    
-    #exit()
-    
+
     print db.schema_list('table')
 
     if 'item' not in db.schema_list('table'):
@@ -662,16 +675,26 @@ def main():
         print i.id, i.value
 
 
+def sql_split(sql):
+    state = ""
+    result = []
+    tmp = []
+    for i in sql:
+        if state == "":
+            if i == "'":
+                state = "'"
+                result.append(''.join(tmp))
+                tmp = []
+            else:
+                tmp.append(i)
+        if state == "":
+            pass
 
 if __name__ == '__main__':
-    #rewrite_query(' ala ma "kota" a nie `psa` a tym bardziej "ch\\"omika" lub "x""y"', "")
-    #dr = DataRewriter('qmark', 'numeric', 'ala = :1 and b = :2')
-    #print dr.sql
-    #print dr.rewrite_data(['ala', 'kot'])
+    sql_split(sql)
     main()
     #test_speed()
     #unittest.main()
-    #print Cache(3)
 ## driver, adapter, module
 
 '''
