@@ -34,6 +34,9 @@ class RowObject(object):
 
     __repr__ = __str__
 
+    def __len__(self):
+        return len(self._data)
+
     def __list__(self):
         return list(self._data)
 
@@ -420,6 +423,10 @@ class Database(object):
     def executemany(self, sql, data):
         dr = self._get_rewriter(self._get_sql(sql))
         self._cur.executemany(dr.sql, dr.rewrite_data_seq(data))
+   
+    def run(self, sql, data=None):
+        "TODO: this is depricated?"
+        return self.execute(sql, data).list()
 
     def begin(self, isolation=''):
         isolations = {
@@ -473,11 +480,45 @@ class Database(object):
                 d = self._build_names()
                 for i in self._cur.fetchall():
                     result.append(RowObject(i, d))
-        except psycopg2.ProgrammingError, e:
+        except self._module.ProgrammingError, e:
             print 'ProgrammingError', e
         return result
 
-
+    def format_ascii(self):
+        def format_one_line(data, lens):
+            return '| ' + ' | '.join(d.ljust(i) for i, d in zip(lens, data)) + ' |'
+        def get_names(desc):
+            return [d[0].lower() for d in self._cur.description]
+        def get_names_len(desc):
+            return [len(d[0]) for d in self._cur.description]
+        def get_strings_and_lens(data, in_lens):
+            lens = list(in_lens)
+            strings = []
+            for row in data:
+                tmp = []
+                for i, c in enumerate(row):
+                    str_ = str(c)
+                    lens[i] = max(lens[i], len(str_))
+                    tmp.append(str_)
+                strings.append(tmp)
+            return strings, lens
+        
+        assert len(self._cur.description) > 0, "There are no result"
+        lens = get_names_len(self._cur.description)
+        strings, lens = get_strings_and_lens(self._cur.fetchall(), lens)
+    
+        result = []
+        spacer = '+-' + '-+-'.join(['-' * i for i in lens]) + '-+'
+        
+        result.append(spacer)
+        result.append(format_one_line(get_names(self._cur.description), lens))
+        result.append(spacer)
+        
+        for data in strings:
+            result.append(format_one_line(data, lens))
+        result.append(spacer)
+        
+        return '\n'.join(result)
 
 class SQLite(Database):
     _short_names = ['li', 'sqlite']
@@ -640,6 +681,47 @@ def rewrite_query(query, mode):
         
     print result
 
+def connect(file=None, dsn=None, **kw):
+    """ Create connection to database.
+        
+        Read connection params from:
+         1) file
+         2) DSN string
+         3) keyword params
+        Later parameters overwrite previous 
+    """
+    def param(data):
+        parts = [i.strip() for i in data.split('=', 1)]
+        assert len(parts) == 2
+        name, value = parts[0], parts[1]
+        if (value[0] == value[-1]) and (value[0] in ['"', "'"]):
+            return {name: value[1:-1]}
+        else:
+            return {name: value}
+
+    params = {}
+    
+    # read params from file
+    if file is not None:
+        fin = open(file)
+        lines = fin.readlines()
+        f.close()
+        for line in lines:
+            line = line.strip()
+            
+            # skip empty lines and comments
+            if line and not line.startswith('#'):
+                params.update(param(line))
+    
+    # read params from DSN
+    if dsn is not None:
+        for part in dsn.split():
+            params.update(param(part))
+            
+    params.update(kw)
+    
+    return Database.connect(**params)
+    
 
 def main():
     #db = Database.connect(dialect='postgresql', dbname='test_pada', user='kosqx', host='localhost', password='kos144')
@@ -671,9 +753,13 @@ def main():
     for i in l:
         print i[0], i[1], i['id'], i['value'], i.id, i.value, list(i)
     '''
+    
+    
     for i in db.execute({'*': "SELECT * FROM item WHERE value >= :1"}, [5.5]):
         print i.id, i.value
 
+    print db.execute({'*': "SELECT * FROM item WHERE value >= :1"}, [5.5]).format_ascii()
+        
 
 def sql_split(sql):
     state = ""
@@ -687,11 +773,22 @@ def sql_split(sql):
                 tmp = []
             else:
                 tmp.append(i)
-        if state == "":
-            pass
+        if state == "'":
+            if i == "'":
+                state = "''"
+            else:
+                tmp.append(i)
+                
+        if state == "''":
+            if i == "'":
+                state = "'''"
+                result.append(''.join(tmp))
+            else:
+                tmp.append(i)
+        
 
 if __name__ == '__main__':
-    sql_split(sql)
+    #sql_split(sql)
     main()
     #test_speed()
     #unittest.main()

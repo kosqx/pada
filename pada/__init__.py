@@ -1,1 +1,1 @@
-from pada import Database, RowObject
+from pada import Database, RowObject, connect

@@ -7,7 +7,7 @@ from distutils.core import setup
 # look: http://pypi.python.org/pypi?%3Aaction=list_classifiers
 
 setup(
-    name='Lily Player',
+    name='PADA',
     version='0.5.0',
     license='LGPL',
     description='Python Advanced DB API',
@@ -30,5 +30,3 @@ setup(
         'Topic :: Software Development :: Libraries :: Python Modules'
     ],
 )
-
-
