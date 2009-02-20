@@ -1,0 +1,42 @@
+PADA - Python Advanced DB API
+
+This is still beta software!
+
+This is Python library that gives you simply access to database.
+PADA is not O/RM (Object/Relational Mapping), you still must write SQL
+but with this library this is easier.
+
+Features:
+ - rewriting querires (and data) to from one of the paramstyles:
+   - qmark    - '?' 
+   - format   - '%s'
+   - numeric  - ':1'
+   - named    - ':name'
+   - pyformat - '%(name)s'
+   to paramstyle supported by used database.
+
+---------------------------------------------------------------------
+
+INSTALL
+
+On Linux just run this command in console:
+
+ sudo python setup.py install
+
+
+You still need driver to database which you use. Currently supported databases:
+  - SQLite     (driver included in Python 2.5)
+  - PostgreSQL (driver 'psycopg2')
+  - MySQL      (driver 'MySQLdb')
+  - Oracle     (driver 'cx_Oracle')
+
+---------------------------------------------------------------------
+
+TODO:
+  - write documentation
+  - write examples
+  - move unittests to separate directory
+  - add support to IBM DB2 and Micsosoft SQL Server
+  - formating result to XML and YAML
+  - output format result to file/stream 
+  - add support to 'with' keyword

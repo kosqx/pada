@@ -1,16 +1,19 @@
 #!/usr/bin/env python
 #-*- coding: utf-8 -*-
 
-## Global TODO:
-#  - czytanie parametrow polacznia z pliku
-#  - przepisywanie parametrow
-
-
 import re
 import time
 
 import unittest
 
+
+_paramstyle = {
+    'qmark':    {'re': r'(\?)',                  'start': 0, 'end': None, 'pattern': '?',             'type':'pos'},
+    'format':   {'re': r'(\%s)',                 'start': 0, 'end': None, 'pattern': '%%s',           'type':'pos'},
+    'numeric':  {'re': r'(\:[0-9]+)',            'start': 1, 'end': None, 'pattern': ':%(pos)s',      'type':'num'},
+    'named':    {'re': r'(\:[a-zA-Z0-9]+)',      'start': 1, 'end': None, 'pattern': ':%(name)s',     'type':'name'},
+    'pyformat': {'re': r'(\%\([a-zA-Z0-9]+\)s)', 'start': 2, 'end': -2,   'pattern': '%%(%(name)s)s', 'type':'name'},
+}
 
 class RowObject(object):
     def __init__(self, data, names):
@@ -29,10 +32,15 @@ class RowObject(object):
         else:
             raise AttributeError, name
 
+    def _str(self):
+        reverted_names = dict([(self._names[key], key) for key in self._names])
+        return ', '.join('%s=%r' % (reverted_names[i], v) for i, v in enumerate(self._data))
+    
     def __str__(self):
-        return str(self._data)
+        return '(' + self._str() + ')'
 
-    __repr__ = __str__
+    def __repr__(self):
+        return 'RowObject(' + self._str() + ')'
 
     def __len__(self):
         return len(self._data)
@@ -130,13 +138,13 @@ class CacheTest(unittest.TestCase):
         
     
 class DataRewriter(object):
-    _paramstyle = {
-        'qmark':    {'re': r'(\?)',                  'start': 0, 'end': None, 'pattern': '?',             'type':'pos'},
-        'format':   {'re': r'(\%s)',                 'start': 0, 'end': None, 'pattern': '%%s',           'type':'pos'},
-        'numeric':  {'re': r'(\:[0-9]+)',            'start': 1, 'end': None, 'pattern': ':%(pos)s',      'type':'num'},
-        'named':    {'re': r'(\:[a-zA-Z0-9]+)',      'start': 1, 'end': None, 'pattern': ':%(name)s',     'type':'name'},
-        'pyformat': {'re': r'(\%\([a-zA-Z0-9]+\)s)', 'start': 2, 'end': -2,   'pattern': '%%(%(name)s)s', 'type':'name'},
-    }
+    #_paramstyle = {
+        #'qmark':    {'re': r'(\?)',                  'start': 0, 'end': None, 'pattern': '?',             'type':'pos'},
+        #'format':   {'re': r'(\%s)',                 'start': 0, 'end': None, 'pattern': '%%s',           'type':'pos'},
+        #'numeric':  {'re': r'(\:[0-9]+)',            'start': 1, 'end': None, 'pattern': ':%(pos)s',      'type':'num'},
+        #'named':    {'re': r'(\:[a-zA-Z0-9]+)',      'start': 1, 'end': None, 'pattern': ':%(name)s',     'type':'name'},
+        #'pyformat': {'re': r'(\%\([a-zA-Z0-9]+\)s)', 'start': 2, 'end': -2,   'pattern': '%%(%(name)s)s', 'type':'name'},
+    #}
     
     def __init__(self, db, user, sql):
         self._db = db
@@ -166,16 +174,16 @@ class DataRewriter(object):
             self.sql = ''.join(result)
 
     def _parse_sql(self, sql):
-        regexp = re.compile(self._paramstyle[self._user]['re'])
+        regexp = re.compile(_paramstyle[self._user]['re'])
         return regexp.split(sql)
         
     def _type(self, style):
-        return self._paramstyle[style]['type']
+        return _paramstyle[style]['type']
         
     def _param(self, pos, name):
         NAME_FORMAT = 'p%d'
         
-        name = name[self._paramstyle[self._user]['start']:self._paramstyle[self._user]['end']]
+        name = name[_paramstyle[self._user]['start']:_paramstyle[self._user]['end']]
         
         if self._format is not None: 
             types = (self._type(self._db), self._type(self._user))
@@ -197,7 +205,7 @@ class DataRewriter(object):
                 self._format[NAME_FORMAT % int(name)] = int(name) - 1
                 name = NAME_FORMAT % int(name)
         
-        return self._paramstyle[self._db]['pattern'] % {'pos':pos, 'name':name}
+        return _paramstyle[self._db]['pattern'] % {'pos':pos, 'name':name}
         
     def rewrite_data(self, data):
         """
@@ -229,7 +237,7 @@ class DataRewriter(object):
 
     @staticmethod
     def support_paramstyle(paramstyle):
-        return (paramstyle in DataRewriter._paramstyle) or paramstyle is None
+        return (paramstyle in _paramstyle) or (paramstyle is None)
 
 def test_speed():
     from time import time
@@ -264,20 +272,7 @@ class DataRewriterTest(unittest.TestCase):
                 print
                 assert dr.sql == test[1]
                 assert dr.rewrite_data(data) == test[2]
-    
-    #def testFromNumeric(self):
-        
-        #tests = {
-            #'qmark':    ['a = ? b = ? c = ?', [123, 144, 123]],
-            #'format':   ['a = %s b = %s c = %s', [123, 144, 123]],
-            #'numeric':  ['a = :1 b = :2 c = :1', [123, 144]],
-            #'named':    ['a = :p1 b = :p2 c = :p1', {'p1':123, 'p2':144}],
-            #'pyformat': ['a = %(p1)s b = %(p2)s c = %(p1)s', {'p1':123, 'p2':144}]
-        #}
-        #for i in tests:
-            #print i
-            #print '%60s   %r' % DataRewriter.test(i, 'numeric', tests['numeric'][0], tests['numeric'][1])
-        
+
 
 class Database(object):
     class DatabaseIterator:
@@ -307,6 +302,8 @@ class Database(object):
         else:
             self.set_paramstyle(None)
 
+    def is_dialect(self, name):
+        return name in self._short_names
 
     def set_paramstyle(self, paramstyle):
         #  jeden z 'qmark', 'numeric', 'named', 'format', 'pyformat'
@@ -331,8 +328,9 @@ class Database(object):
 
     def _build_names(self):
         result = {}
-        for i, d in enumerate(self._cur.description):
-            result[d[0].lower()] = i
+        if self._cur.description is not None:
+            for i, d in enumerate(self._cur.description):
+                result[d[0].lower()] = i
         return result
 
     def schema_list(what=''):
@@ -399,24 +397,37 @@ class Database(object):
         asql = self._get_sql(sql)
         if asql is None:
             return self
-        self._cur.execute(asql)
+        if isinstance(asql, (list, tuple)):
+            for i in asql:
+                print i
+                self._cur.execute(i)
+        else:
+            self._cur.execute(asql)
         self._db.commit()
         return self
 
     def _get_rewriter(self, sql):
         return DataRewriter(self._module.paramstyle, self._paramstyle, sql)
 
+    def _just_execute(self, sql, data=None):
+        self._cur.execute(sql, data)
+        return self
+
     def execute(self, sql, data=None):
         asql = self._get_sql(sql)
         if asql is None:
             return self
-        
-        dr = self._get_rewriter(asql)
-        
+
         if data is not None:
+            dr = self._get_rewriter(asql)
+            print 'execute.rewrite', repr(dr.sql), dr.rewrite_data(data)
             self._cur.execute(dr.sql, dr.rewrite_data(data))
         else:
-            self._cur.execute(dr.sql)
+            if isinstance(asql, (list, tuple)):
+                for i in asql:
+                    self._cur.execute(i)
+            else:
+                self._cur.execute(asql)
         
         return self
 
@@ -427,6 +438,39 @@ class Database(object):
     def run(self, sql, data=None):
         "TODO: this is depricated?"
         return self.execute(sql, data).list()
+
+    def insert_id(self, sql, data):
+        raise NotImplemented
+
+    def _insert_build(self, table, values, raw={}):
+        paramstyle = _paramstyle[self._module.paramstyle]
+        pattern = paramstyle['pattern']
+
+        data   = []
+        names  = []
+        params = []
+        
+        for key in raw:
+            names.append(key)
+            params.append(raw[key]) 
+        
+        for i, key in enumerate(values):
+            data.append(values[key])
+            names.append(key)
+            params.append(pattern % {'pos': i + 1, 'name': key}) 
+            
+        sql = 'INSERT INTO %s(%s) VALUES(%s)' % (table, ', '.join(names), ', '.join(params))
+        
+        print sql, data, values
+        
+        if paramstyle['type'] in ('pos', 'num'):
+            return sql, data
+        else:
+            return sql, values
+
+    def insert(self, table, **values):
+        return self._do_insert(table, values)
+        #raise NotImplemented
 
     def begin(self, isolation=''):
         isolations = {
@@ -451,7 +495,6 @@ class Database(object):
             self._do_begin(isolations[isolation])
 
     def _do_begin(self, isolation):
-        # TODO: uspujnic ten slownik
         isolations = {
             'uncommited':   'SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED',
             'commited':     'SET TRANSACTION ISOLATION LEVEL READ COMMITTED',
@@ -472,13 +515,18 @@ class Database(object):
     def commit(self):
         self._db.commit()
 
+    def _rowcount(self):
+        return self._cur.rowcount
+
     def list(self):
         result = []
         try:
             #print 'self._cur.rowcount', self._cur.rowcount
-            if self._cur.rowcount >= 0: 
+            #if self._cur.rowcount >= 0: 
+            if self._rowcount() >= 0: 
                 d = self._build_names()
                 for i in self._cur.fetchall():
+                    print 'list ' * 10, i
                     result.append(RowObject(i, d))
         except self._module.ProgrammingError, e:
             print 'ProgrammingError', e
@@ -520,6 +568,11 @@ class Database(object):
         
         return '\n'.join(result)
 
+
+#--------------------------------------------------------------------
+# Database specyfic code
+
+
 class SQLite(Database):
     _short_names = ['li', 'sqlite']
     _short_name  = 'sqlite'
@@ -544,7 +597,21 @@ class SQLite(Database):
             raise 'Unsupported'
         data = self._cur.fetchall()
         return [i[0].lower() for i in data]
+     
+    def _rowcount(self):
+        return 1
+        
+    def insert_id(self, sql, data):
+        self.execute(sql, data)
+        rid = self.execute('SELECT last_insert_rowid()').list()[0][0]
+        print rid
+        return rid
 
+    def _do_insert(self, table, values):
+        sql, data = self._insert_build(table, values)
+        self._just_execute(sql, data)
+        rid = self.execute('SELECT last_insert_rowid()').list()[0][0]
+        return rid
 
 class Oracle(Database):
     _short_names = ['ora', 'oracle']
@@ -581,14 +648,90 @@ class Oracle(Database):
         data = self._cur.fetchall()
         return [i[0].lower() for i in data]
 
+    #def insert_id(self, sql, data):
+        #var = self._cur.var(self._module.NUMBER)
+        ##self.execute(sql + ' RETURNING id INTO %s', data + [var])
+        #self._cur.execute(sql + ' returning id into %s', data + [var])
+        #return var.getvalue()
+        
+    def insert_id(self, sql, data):
+        parts = sql.lower().split()
+        assert parts[:2] == ['insert', 'into']
+        self.execute(sql, data)
+        rid = self.execute("SELECT %s_id_seq.curval FROM dual" % parts[2]).list()[0][0]
+        return rid
+    
+    def _do_insert(self, table, values):
+        rid = self.execute("SELECT %s_id_seq.nextval FROM dual" % table).list()[0][0]
+        values = dict(values)
+        values['id'] = rid
+        sql, data = self._insert_build(table, values)
+        self._just_execute(sql, data)
+        return rid
 
 class DB2(Database):
+    """ easy_install ibm_db
+    
+    1) install DB2 9 Express-C
+
+    2) download PyDB2-1.1.0-2.tar.gz
+    http://sourceforge.net/projects/pydb2/
+
+    3) tar zxvf PyDB2-1.1.0-2.tar.gz
+    4) cd PyDB2-1.1.0
+    5) vi setup.py
+    6) modify 2 lines 
+
+    DB2_ROOT = "/opt/ibm/db2exc/V9.5/"
+    library_dirs=[db2_root_dir+'lib32'],
+
+    7) sudo python setup.py install
+    
+    """
     _short_names = ['db2']
     _short_name  = 'db2'
     _full_name  = 'DB2'
 
+    def __init__(self,  **config):
+        Database.__init__(self, **config)
+
+        if 'driver' not in config or config['driver'] in ['pydb2', None]:
+            import DB2
+            self._module = DB2
+            # TODO: host and port
+            args = Database._dict_copy(config, {'dbname': 'dsn', 'user': 'uid', 'password': 'pwd'})
+            self._db = self._module.connect(**args)
+        elif config['driver'] in ['ibm_db', 'ibmdb']:
+            pass
+        else:
+            raise "Unknow driver %r" % driver
+
+        self._cur = self._db.cursor()
+
+    def schema_list(self, what='table'):
+        what = what.lower()
+
+        if what in ('table', 'tables'):
+            self._cur.execute("SELECT name FROM sysibm.systables WHERE type = 'T' AND creator NOT LIKE 'SYS%' ORDER BY name")
+            data = self._cur.fetchall()
+        else:
+            raise 'Unsupported'
+        return [i[0].lower() for i in data]
+    
+    def _rowcount(self):
+        return 1
+    
+    def _do_insert(self, table, values):
+        sql, data = self._insert_build(table, values)
+        self._just_execute(sql, data)
+        # TODO: better last_insert_id 
+        rid = (self.execute('SELECT max(id) from %s' % table).list() + [[0]])[0][0]
+        return rid
 
 class SQLServer(Database):
+    """wajig install freetds-dev && easy_install pymssql
+    
+    """
     _short_names = ['server', 'sqlserver']
     _short_name  = 'sqlserver'
     _full_name  = 'SQLServer'
@@ -622,6 +765,18 @@ class MySQL(Database):
             raise 'Unsupported'
         return [i[0].lower() for i in data]
 
+    def insert_id(self, sql, data):
+        self.execute(sql, data)
+        rid = self.execute('SELECT last_insert_id()').list()[0][0]
+        #rid = self.execute(sql + ' RETURNING id', data).list()[0][0]
+        return rid
+
+    def _do_insert(self, table, values):
+        sql, data = self._insert_build(table, values)
+        self._just_execute(sql, data)
+        rid = self.execute('SELECT last_insert_id()').list()[0][0]
+        return rid
+
 
 class PostgreSQL(Database):
     _short_names = ['pg', 'psql', 'postgres', 'postgresql']
@@ -653,6 +808,14 @@ class PostgreSQL(Database):
             raise 'Unsupported'
         return [i[0].lower() for i in data]
 
+    def insert_id(self, sql, data):
+        rid = self.execute(sql + ' RETURNING id', data).list()[0][0]
+        return rid
+    
+    def _do_insert(self, table, values):
+        sql, data = self._insert_build(table, values, {'id': 'DEFAULT'})
+        rid = self._just_execute(sql + ' RETURNING id', data).list()[0][0]
+        return rid
 
 def rewrite_query(query, mode):
     last = None
@@ -688,7 +851,7 @@ def connect(file=None, dsn=None, **kw):
          1) file
          2) DSN string
          3) keyword params
-        Later parameters overwrite previous 
+        Parameters from next source can overwrite previous 
     """
     def param(data):
         parts = [i.strip() for i in data.split('=', 1)]
@@ -705,7 +868,7 @@ def connect(file=None, dsn=None, **kw):
     if file is not None:
         fin = open(file)
         lines = fin.readlines()
-        f.close()
+        fin.close()
         for line in lines:
             line = line.strip()
             
@@ -788,14 +951,8 @@ def sql_split(sql):
         
 
 if __name__ == '__main__':
-    #sql_split(sql)
     main()
     #test_speed()
     #unittest.main()
 ## driver, adapter, module
 
-'''
-Todo:
-    sprawdzić czy PK hash jest lepszy od b-tree
-    sprawdzic jaka jest różnica przy pogrupowaniu
-'''
